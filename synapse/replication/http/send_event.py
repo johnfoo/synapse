@@ -17,7 +17,7 @@ from twisted.internet import defer
 
 from synapse.api.errors import SynapseError, MatrixCodeMessageException
 from synapse.events import FrozenEvent
-from synapse.events.snapshot import EventContext
+from synapse.events.snapshot import StatelessEventContext
 from synapse.http.servlet import RestServlet, parse_json_object_from_request
 from synapse.util.metrics import Measure
 from synapse.types import Requester
@@ -38,7 +38,7 @@ def send_event_to_master(client, host, port, requester, event, context):
         port (int): port on master listening for HTTP replication
         requester (Requester)
         event (FrozenEvent)
-        context (EventContext)
+        context (StatelessEventContext)
     """
     uri = "http://%s:%s/_synapse/replication/send_event" % (host, port,)
 
@@ -46,7 +46,7 @@ def send_event_to_master(client, host, port, requester, event, context):
         "event": event.get_pdu_json(),
         "internal_metadata": event.internal_metadata.get_dict(),
         "rejected_reason": event.rejected_reason,
-        "context": context.serialize(event),
+        "context": context.serialize(),
         "requester": requester.serialize(),
     }
 
@@ -96,7 +96,9 @@ class ReplicationSendEventRestServlet(RestServlet):
             event = FrozenEvent(event_dict, internal_metadata, rejected_reason)
 
             requester = Requester.deserialize(self.store, content["requester"])
-            context = yield EventContext.deserialize(self.store, content["context"])
+            context = yield StatelessEventContext.deserialize(
+                self.store, content["context"],
+            )
 
         if requester.user:
             request.authenticated_entity = requester.user.to_string()
